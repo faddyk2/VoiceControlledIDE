@@ -1,3 +1,4 @@
+import wordsToNumbers from "words-to-numbers";
 let functionStartLine = null;
 let functionEndLine = null;
 const commands = {
@@ -47,6 +48,17 @@ const commands = {
         editor.setPosition({ lineNumber: lineNumber + 1, column: 1 });
     
     },
+    'Assist': (setCode, editor,answer) => {
+        var selection = editor.getSelection();
+        var op = {range : selection, text: answer};
+        setCode('');
+        setCode(answer);
+
+    },
+    'call function with arguments': (funcName, args, setCode, editor) => {
+        const newFunction = `${funcName}(${args.join(', ')});`;
+        setCode(prevCode => prevCode + newFunction);
+    },
     'remove current line': (setCode, editor) => {
         const position = editor.getPosition();
         const lineNumber = position.lineNumber;
@@ -69,6 +81,11 @@ const commands = {
         if (position.lineNumber < lineCount) {
             editor.setPosition({ lineNumber: position.lineNumber + 1, column: position.column });
         }
+    },
+    'print string': (setCode, editor, value) => {
+        var selection = editor.getSelection();
+        var op = {range : selection, text: `console.log("'${value}'");`};
+        editor.executeEdits('my-source', [op]);
     },
     'add line in block' :(editor) => {
         const position = editor.getPosition();
@@ -174,6 +191,7 @@ const commands = {
         });
 
     },
+   
     
     'move cursor sideways' :(direction, editor) => {
         const position = editor.getPosition();
@@ -193,7 +211,10 @@ const commands = {
     
         editor.setSelection(range);
     },
-    
+    'create function with parameters': (funcName, params, setCode, editor) => {
+        const newFunction = `\nfunction ${funcName}(${params.join(', ')}) {\n    \n}`;
+        setCode(prevCode => prevCode + newFunction);
+    },
    'create function': (funcName, setCode, editor) => {
     var selection = editor.getSelection();
     const position = editor.getPosition().lineNumber;
@@ -292,7 +313,7 @@ const commands = {
         console.log(`Invalid line number: ${lineNumber}. Total lines: ${totalLines}`); 
     }
 },
-    'if else' : (editor) => {
+    'if else' : (editor,condition) => {
         const position = editor.getPosition();
         editor.executeEdits('my-source', [
             {
@@ -302,7 +323,7 @@ const commands = {
                     endLineNumber: position.lineNumber,
                     endColumn: 1,
                 },
-                text: 'if (condition) {\n    \n} else {\n    \n}',
+                text: `if (${condition}) {\n    \n} else {\n    \n}`,
             },
         ]);
       
@@ -323,13 +344,36 @@ const commands = {
         ]);
    
         editor.setPosition({ lineNumber: position.lineNumber + 1, column: 5 });
+    },
+    'create switch statement': (editor,setCode, variable, cases) => {
+        const switchStatement = `
+    switch (${variable}) {
+        ${cases.map(c => `case '${c}':\n    // Add logic for ${c}\n    break;`).join('\n')}
+        default:
+            console.log('No matching case.');
+            break;
     }
-    
+        `.trim();
+        const position = editor.getPosition();
+        editor.executeEdits('my-source', [
+            {
+                range: {
+                    startLineNumber: position.lineNumber,
+                    startColumn: 1,
+                    endLineNumber: position.lineNumber,
+                    endColumn: 1,
+            },
+            text: switchStatement,
+        },
+    ]);
+    }
+}
 
-};
 
 
-const handleCommand = (transcript, setCode, editor,addOutput) => {
+
+
+const handleCommand = async (transcript, setCode, editor,addOutput) => {
 
     
     let cleanedTranscript = transcript.trim().toLowerCase();
@@ -341,6 +385,22 @@ const handleCommand = (transcript, setCode, editor,addOutput) => {
         if (cleanedTranscript.startsWith('declare variable ')) {
             const varName = cleanedTranscript.split(' ')[2];
             commands['declare variable'](varName, setCode);
+            commandFound = true;
+            break;
+        }
+        if (cleanedTranscript.startsWith('print string ')) {
+            const value = cleanedTranscript.split(' ').slice(2).join(' ');
+            commands['print string'](setCode, editor, value);
+            commandFound = true;
+            break;
+        }
+        if (cleanedTranscript.startsWith('assist')){
+            const parts = cleanedTranscript.split(' ', 2);
+             const sentenceAfterAssist = cleanedTranscript.substring(parts[0].length).trim();
+             let code = editor.getValue();
+             let res =  await askAi(sentenceAfterAssist,code);
+             res = res.replace('```javascript','').replaceAll('```','').replaceAll('`','');
+             commands['Assist'](setCode,editor, res);
             commandFound = true;
             break;
         }
@@ -357,6 +417,37 @@ const handleCommand = (transcript, setCode, editor,addOutput) => {
             commandFound = true;
             break;
         }
+        if (cleanedTranscript.startsWith('create switch statement')) {
+            const parts = cleanedTranscript.split(' ');
+            const variable = parts[3]; 
+            const cases = parts.slice(4); 
+        
+            if (!variable || cases.length === 0) {
+                console.log('Invalid input. Provide a variable and at least one case.');
+                break;
+            }
+        
+            commands['create switch statement'](editor,setCode, variable, cases);
+            commandFound = true;
+            break;
+        }
+        if (cleanedTranscript.startsWith('call function with arguments')) {
+            const parts = cleanedTranscript.split(' ');
+            const funcName = parts[4];
+            let args = parts.slice(5);
+            //if any word in args is not a number , quote the argument
+            for (let i = 0; i < args.length; i++) {
+                if (isNaN(args[i])) {
+                    args[i] = `'${args[i]}'`;
+                }
+            }
+            commands['call function with arguments'](funcName, args, setCode, editor);
+            commandFound = true;
+            break;
+        }
+
+
+
         if(cleanedTranscript.startsWith('go to text')){
             const text = cleanedTranscript.split(' ').slice(2).join(' ');
             commands['go to text'](text, setCode, editor);
@@ -384,8 +475,19 @@ const handleCommand = (transcript, setCode, editor,addOutput) => {
             commandFound = true;
             break;
         }
+        if(cleanedTranscript.includes('create function with parameters')){
+            const parts = cleanedTranscript.split(' ');
+            const funcName = parts[4];
+            const params = parts.slice(5)
+            commands['create function with parameters'](funcName, params, setCode, editor);
+            commandFound = true;
+            break;
+        }
+        
         if (cleanedTranscript.startsWith('create function ')) {
-            const funcName = cleanedTranscript.split(' ')[2];
+
+            let funcName = cleanedTranscript.split(' ').slice(2).join(' ');
+            funcName = funcName.replace(' ','');
             commands['create function'](funcName, setCode, editor);
             commandFound = true;
             break;
@@ -417,8 +519,9 @@ const handleCommand = (transcript, setCode, editor,addOutput) => {
             commandFound = true;
             break;
         }
-        if (cleanedTranscript.startsWith('if else')) {
-            commands['if else'](editor);
+        if (cleanedTranscript.startsWith('if')) {
+            const condition = cleanedTranscript.split(' ').slice(1).join(' ');
+            commands['if else'](editor,condition);
             commandFound = true;
             break;
         }
@@ -463,13 +566,13 @@ const handleCommand = (transcript, setCode, editor,addOutput) => {
         }
         
         if (cleanedTranscript.startsWith('jump to line')) {
-            // Extract line number using regex
+         
             const match = cleanedTranscript.match(/jump to line (\d+)/);
         
             if (match) {
                 const lineNumber = parseInt(match[1], 10);
-                console.log(`Parsed line number: ${lineNumber}`); // Debug log
-        
+                console.log(`Parsed line number: ${lineNumber}`);
+                lineNumber = wordsToNumbers(lineNumber);
                 if (!isNaN(lineNumber)) {
                     commands['jump to line'](lineNumber, editor);
                 } else {
@@ -501,7 +604,7 @@ const handleCommand = (transcript, setCode, editor,addOutput) => {
         if (commandFound) {
             addOutput('Command executed successfully.');
         } else {
-            addOutput('Command not recognized.');
+           // addOutput('Command not recognized.');
         }
     
     
@@ -523,6 +626,55 @@ function cleaner(transcript){
     if(transcript.includes('minus')){
         transcript = transcript.replace('minus','-');
     }
+    if (transcript.includes('is greater than')){
+        transcript = transcript.replace('is greater than', '>');
+    }
+    if (transcript.includes('is less than')){
+        transcript = transcript.replace('is less than', '<');
+    }
+    if (transcript.includes('is equal to')){
+        transcript = transcript.replace('is equal to', '=');
+    }
+    if (transcript.includes('equals')){
+        transcript = transcript.replace('equals', '=');
+    }
+    let words = transcript.split(' '); 
+    for (let word of words) {
+          let num =  wordsToNumbers(word);
+          transcript = transcript.replace(word,num);
+    }
+
     return transcript;
+}
+
+
+async function askAi(question,code) {
+    try {
+        const response = await fetch("/api/ask", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                messages: [
+                    {
+                        role: "user",
+                        content: question,
+                        Current: code
+                    }
+                ]
+            })
+        });
+        const data = await response.json();
+        console.log("Response from API:", data.response);
+        const res = data.response.toString();
+        if (data.response.startsWith('```')) {
+            console.log('yes');
+        }
+        return res;
+    } catch (error) {
+        console.error("Error:", error);
+        throw error; 
+    }
 }
 

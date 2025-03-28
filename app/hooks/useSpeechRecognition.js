@@ -7,7 +7,6 @@ const useSpeechRecognition = (onResult) => {
     useEffect(() => {
         const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
         recognition.continuous = true;
-
         recognition.onresult = (event) => {
             const currentTranscript = event.results[event.resultIndex][0].transcript;
             setTranscript(currentTranscript);
@@ -17,11 +16,15 @@ const useSpeechRecognition = (onResult) => {
         recognition.onerror = (event) => {
             setError(event.error);
         };
+        recognition.onSpeechEnd = () => {
+            recognition.start();
+
+        };
 
         recognition.start();
 
         return () => {
-            recognition.stop();
+            
         };
     }, [onResult]);
 
