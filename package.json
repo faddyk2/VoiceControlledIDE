@@ -12,7 +12,8 @@
     "@monaco-editor/react": "^4.6.0",
     "next": "^15.1.0",
     "react": "^18",
-    "react-dom": "^18"
+    "react-dom": "^18",
+    "words-to-numbers": "^1.5.1"
   },
   "devDependencies": {
     "@types/node": "22.7.5",
