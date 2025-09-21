@@ -1,9 +1,10 @@
 "use client";
 import { useState, useMemo } from 'react';
 import { commandCategories, allCommands, helpTips } from '../data/commands';
+import VoiceStatus from './VoiceStatus';
 import styles from './CommandDocumentation.module.css';
 
-const CommandDocumentation = () => {
+const CommandDocumentation = ({ isListening = false, lastCommand = '', commandFound = false }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [expandedCategories, setExpandedCategories] = useState(new Set(['Program Control']));
@@ -82,6 +83,13 @@ const CommandDocumentation = () => {
           {totalCommands} commands available • Interactive guide
         </p>
       </div>
+
+      {/* Voice Status */}
+      <VoiceStatus 
+        isListening={isListening}
+        lastCommand={lastCommand}
+        commandFound={commandFound}
+      />
 
       {/* Search and Filter */}
       <div className={styles.controls}>
@@ -192,7 +200,7 @@ const CommandDocumentation = () => {
       {/* Footer */}
       <div className={styles.footer}>
         <p>💬 Speak clearly and use exact syntax for best results</p>
-        <p>🔊 Check your microphone permissions if commands aren't working</p>
+        <p>🔊 Check your microphone permissions if commands aren&apos;t working</p>
       </div>
     </div>
   );
