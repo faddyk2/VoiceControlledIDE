@@ -6,6 +6,7 @@ import { useLogger } from '../context/LoggerContext';
 import { useOutput } from '../context/OutputContext';
 import useSpeechRecognition from '../hooks/useSpeechRecognition';
 import handleCommand from '../hooks/commandHandler';
+import CommandDocumentation from '../components/CommandDocumentation';
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
 
@@ -50,11 +51,7 @@ function Home() {
   return (
     <div className={styles.container}>
       <div className={styles.sidebar}>
-        <h2>VCIDE</h2>
-        <ul>
-          <li>File1.js</li>
-          <li>File2.js</li>
-        </ul>
+        <CommandDocumentation />
       </div>
       <div className={styles.main}>
         <div className={styles.codeEditor}>
